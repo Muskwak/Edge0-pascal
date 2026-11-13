@@ -231,6 +231,7 @@ if(STRATA_HIP_GFX906)
   set(_strata_gpu_blas_target CUDA::cublas)
   set(_strata_gpu_include_directories ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 elseif(STRATA_ENABLE_CUDA)
+  option(STRATA_EXPERIMENTAL_SM60 "community build for GPUs below compute capability 7.5: Pascal sm_60, Volta sm_70 (#236)" OFF)
   # #585: CMake links CUDA code with the STATIC runtime by default, and the targets below also link CUDA::cudart (the
   # DLL's import library).  MSVC with a CUDA 12.x toolkit - the experimental Pascal/Volta build - then fails with
   # LNK1169 (every cudart symbol defined twice); GNU ld lets it pass.  That build links the shared runtime alone.  The
@@ -243,7 +244,11 @@ elseif(STRATA_ENABLE_CUDA)
   # a build with no option was an sm_75 build.  -DCMAKE_CUDA_ARCHITECTURES and the CUDAARCHS environment variable win.
   set(_strata_cuda_arch_defaulted OFF)
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES AND NOT DEFINED ENV{CUDAARCHS})
-    if(STRATA_BUILD_DSV41)
+    if(STRATA_EXPERIMENTAL_SM60)
+      # The opt-in older-GPU path targets Pascal by default.  Its CUDA 12.x toolkit supports sm_61;
+      # leave CUDA 13+ release builds on their existing architecture defaults below.
+      set(CMAKE_CUDA_ARCHITECTURES 61 CACHE STRING "CUDA architectures")
+    elseif(STRATA_BUILD_DSV41)
       # #3935: the DeepSeek engine's own release shape (sm_86, sm_89, sm_120 + PTX 120, as packaging/build_dsv41_cuda.sh), so a hand
       # build of strata-dsv41 with no architecture runs on an RTX 30, 40 or 50 card; the Qwen engine's default below is unchanged
       set(CMAKE_CUDA_ARCHITECTURES "86-real;89-real;120" CACHE STRING "CUDA architectures")
@@ -256,12 +261,16 @@ elseif(STRATA_ENABLE_CUDA)
   # `enable_language(CUDA)` gives the .cu compile rules but NOT the imported targets, so `CUDA::cudart` has to
   # be brought in explicitly for the host-side tests that call cudaMalloc themselves.
   find_package(CUDAToolkit REQUIRED)
-  option(STRATA_EXPERIMENTAL_SM60 "community build for GPUs below compute capability 7.5: Pascal sm_60, Volta sm_70 (#236)" OFF)
   if(_strata_cuda_arch_defaulted)
-    # a recommendation, not a refusal: the release engine is built for 75;86;89;120, a hand build names its card
-    message(WARNING "Strata: CMAKE_CUDA_ARCHITECTURES was not set, so this build is for ${CMAKE_CUDA_ARCHITECTURES} only (sm_120 = RTX 50). For another "
-                    "card pass it: -DCMAKE_CUDA_ARCHITECTURES=native (the GPUs in this PC), 75 (RTX 20), 86 (RTX 30), "
-                    "89 (RTX 40), or a list like \"86;120\".")
+    if(STRATA_EXPERIMENTAL_SM60)
+      message(WARNING "Strata: CMAKE_CUDA_ARCHITECTURES was not set, so the experimental build targets sm_61 (Pascal) only. "
+                      "For a P100 include sm_60 with -DCMAKE_CUDA_ARCHITECTURES=60;61, or name another supported architecture explicitly.")
+    else()
+      # a recommendation, not a refusal: the release engine is built for 75;86;89;120, a hand build names its card
+      message(WARNING "Strata: CMAKE_CUDA_ARCHITECTURES was not set, so this build is for ${CMAKE_CUDA_ARCHITECTURES} only (sm_120 = RTX 50). For another "
+                      "card pass it: -DCMAKE_CUDA_ARCHITECTURES=native (the GPUs in this PC), 75 (RTX 20), 86 (RTX 30), "
+                      "89 (RTX 40), or a list like \"86;120\".")
+    endif()
   endif()
   foreach(_a IN LISTS CMAKE_CUDA_ARCHITECTURES)
     string(REGEX REPLACE "-.*$" "" _base "${_a}")     # 120-real / 120-virtual are still 120

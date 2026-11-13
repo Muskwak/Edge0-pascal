@@ -101,8 +101,21 @@ A model that shares a V100 with an RTX 30 / 40 card runs both on the CUDA 12 eng
 
 ### Building it yourself
 
+For a Tesla P40/P4 or GTX 10-series card (compute capability 6.1), use a CUDA 12.x toolkit. With the opt-in flag on,
+an unspecified architecture now defaults to `61`, so this minimal build targets Pascal:
+
 ```sh
-# Linux (Windows: the same with the toolkit's nvcc.exe)
+cmake -S . -B build-pascal -DSTRATA_ENABLE_CUDA=ON -DSTRATA_EXPERIMENTAL_SM60=ON \
+      -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc
+cmake --build build-pascal --target strata -j
+```
+
+On Windows, point `CMAKE_CUDA_COMPILER` at `%CUDA_PATH%\bin\nvcc.exe` from a Visual Studio developer prompt. To build
+for a P100 as well, set `-DCMAKE_CUDA_ARCHITECTURES="60;61"`; CUDA 13 cannot compile the Pascal/Volta targets. You can
+still pass `CMAKE_CUDA_ARCHITECTURES` or `CUDAARCHS` to override the default.
+
+```sh
+# Linux, explicit multi-architecture example (Windows: use the toolkit's nvcc.exe)
 cmake -S . -B build-cuda12 -DSTRATA_ENABLE_CUDA=ON -DSTRATA_BUILD_TESTS=OFF -DSTRATA_EXPERIMENTAL_SM60=ON \
       -DCMAKE_CUDA_ARCHITECTURES="61;70" -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc
 cmake --build build-cuda12 --target strata -j
